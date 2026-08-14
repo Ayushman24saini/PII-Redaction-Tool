@@ -1018,7 +1018,7 @@ def detect_entities(
     # Process large paragraphs in smaller chunks.
     # This prevents spaCy from consuming too much memory
     # on low-memory deployment environments such as Render.
-    SPACY_CHUNK_SIZE = 3000
+    SPACY_CHUNK_SIZE = 2000
 
     if len(text) <= SPACY_CHUNK_SIZE:
         spacy_chunks = [(0, nlp(text))]
@@ -1390,7 +1390,13 @@ def process_document():
     )
 
     nlp = spacy.load(
-        MODEL_NAME
+        MODEL_NAME,
+        disable=[
+            "parser",
+            "tagger",
+            "lemmatizer",
+            "attribute_ruler",
+        ],
     )
 
     generator = (
