@@ -6,8 +6,7 @@ from pathlib import Path
 
 import phonenumbers
 import spacy
-from docx import Document, text
-
+from docx import Document
 
 # ============================================================
 # CONFIGURATION
@@ -1016,129 +1015,174 @@ def detect_entities(
     # SPACY
     # --------------------------------------------------------
 
-    doc = nlp(text)
+    # Process large paragraphs in smaller chunks.
+    # This prevents spaCy from consuming too much memory
+    # on low-memory deployment environments such as Render.
+    SPACY_CHUNK_SIZE = 3000
 
-    for entity in doc.ents:
+    if len(text) <= SPACY_CHUNK_SIZE:
+        spacy_chunks = [(0, nlp(text))]
+    else:
+        spacy_chunks = []
 
-        # ====================================================
-        # PERSON
-        # ====================================================
+        for start in range(
+            0,
+            len(text),
+            SPACY_CHUNK_SIZE,
+        ):
+            chunk = text[
+                start:
+                start + SPACY_CHUNK_SIZE
+            ]
 
-        if entity.label_ == "PERSON":
-
-            value = clean_person_entity(
-                entity.text
-            )
-
-            normalized_value = value.strip().lower()
-
-            if (
-                normalized_value not in KNOWN_PERSON_NAMES
-                and not looks_like_person_name(value)
-            ):
-                continue
-
-            # Check whether the entity is actually inside
-            # an address-like region.
-            nearby_left = text[
-                max(
-                    0,
-                    entity.start_char - 80,
-                ):
-                entity.start_char
-            ].lower()
-
-            nearby_right = text[
-                entity.end_char:
-                min(
-                    len(text),
-                    entity.end_char + 80,
+            if chunk.strip():
+                spacy_chunks.append(
+                    (
+                        start,
+                        nlp(chunk),
+                    )
                 )
-            ].lower()
 
-            nearby = (
-                nearby_left
-                + " "
-                + nearby_right
+    for offset, doc in spacy_chunks:
+
+        for entity in doc.ents:
+
+            # Convert spaCy's chunk-relative positions
+            # back to positions in the original text.
+            entity_start = (
+                offset
+                + entity.start_char
             )
 
-            address_context_words = {
-                "road",
-                "marg",
-                "street",
-                "lane",
-                "floor",
-                "building",
-                "complex",
-                "hospital",
-                "showroom",
-                "village",
-                "taluka",
-                "district",
-                "nagar",
-                "society",
-                "branch",
-                "facility",
-                "pune",
-                "mumbai",
-                "maharashtra",
-            }
+            entity_end = (
+                offset
+                + entity.end_char
+            )
 
-            nearby_words = set(
-                re.findall(
-                    r"[a-z]+",
-                    nearby,
+            # ====================================================
+            # PERSON
+            # ====================================================
+
+            if entity.label_ == "PERSON":
+
+                value = clean_person_entity(
+                    entity.text
                 )
-            )
 
-            address_score = len(
-                nearby_words
-                & address_context_words
-            )
-
-            # If spaCy says PERSON but the surrounding
-            # text strongly resembles an address, do not
-            # classify it as a person.
-            if address_score >= 3:
-
-                continue
-
-            add(
-                entity.start_char,
-                entity.end_char,
-                "person",
-                value,
-            )
-
-        # ====================================================
-        # ORGANIZATION
-        # ====================================================
-
-        elif entity.label_ == "ORG":
-
-            value = entity.text.strip()
-
-            lower = value.lower()
-
-            if any(
-                term in lower
-                for term in ORGANIZATION_TERMS
-            ):
+                normalized_value = (
+                    value.strip().lower()
+                )
 
                 if (
-                    lower
-                    not in GENERIC_ORGANIZATION_WORDS
+                    normalized_value
+                    not in KNOWN_PERSON_NAMES
+                    and not looks_like_person_name(value)
+                ):
+                    continue
+
+                # Check whether the entity is actually inside
+                # an address-like region.
+                nearby_left = text[
+                    max(
+                        0,
+                        entity_start - 80,
+                    ):
+                    entity_start
+                ].lower()
+
+                nearby_right = text[
+                    entity_end:
+                    min(
+                        len(text),
+                        entity_end + 80,
+                    )
+                ].lower()
+
+                nearby = (
+                    nearby_left
+                    + " "
+                    + nearby_right
+                )
+
+                address_context_words = {
+                    "road",
+                    "marg",
+                    "street",
+                    "lane",
+                    "floor",
+                    "building",
+                    "complex",
+                    "hospital",
+                    "showroom",
+                    "village",
+                    "taluka",
+                    "district",
+                    "nagar",
+                    "society",
+                    "branch",
+                    "facility",
+                    "pune",
+                    "mumbai",
+                    "maharashtra",
+                }
+
+                nearby_words = set(
+                    re.findall(
+                        r"[a-z]+",
+                        nearby,
+                    )
+                )
+
+                address_score = len(
+                    nearby_words
+                    & address_context_words
+                )
+
+                # If spaCy says PERSON but the surrounding
+                # text strongly resembles an address, do not
+                # classify it as a person.
+                if address_score >= 3:
+                    continue
+
+                add(
+                    entity_start,
+                    entity_end,
+                    "person",
+                    value,
+                )
+
+            # ====================================================
+            # ORGANIZATION
+            # ====================================================
+
+            elif entity.label_ == "ORG":
+
+                value = entity.text.strip()
+
+                lower = value.lower()
+
+                if any(
+                    term in lower
+                    for term in ORGANIZATION_TERMS
                 ):
 
-                    add(
-                        entity.start_char,
-                        entity.end_char,
-                        "organization",
-                        value,
-                    )
+                    if (
+                        lower
+                        not in GENERIC_ORGANIZATION_WORDS
+                    ):
 
+                        add(
+                            entity_start,
+                            entity_end,
+                            "organization",
+                            value,
+                        )
     return findings
 
+
+# ============================================================
+# MERGE FINDINGS
+# ============================================================
 
 # ============================================================
 # MERGE FINDINGS
