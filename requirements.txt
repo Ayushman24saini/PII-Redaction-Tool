@@ -1,0 +1,6 @@
+python-docx
+spacy
+phonenumbers
+faker
+pytest
+click

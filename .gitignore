@@ -1,0 +1,29 @@
+# Python virtual environment
+.venv/
+
+# Python cache
+__pycache__/
+*.py[cod]
+
+# Pytest cache
+.pytest_cache/
+
+# macOS
+.DS_Store
+
+# Original source documents
+input/*.docx
+
+# Generated redacted documents
+output/*.docx
+
+# Local reports / inventories containing document-derived data
+pii_inventory.txt
+ner_inventory.txt
+address_inventory.txt
+verification.txt
+review_output.txt
+evaluation_report.md
+
+# Temporary Office lock files
+output/~$*
