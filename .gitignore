@@ -23,7 +23,6 @@ ner_inventory.txt
 address_inventory.txt
 verification.txt
 review_output.txt
-evaluation_report.md
 
 # Temporary Office lock files
 output/~$*
